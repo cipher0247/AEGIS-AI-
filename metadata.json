@@ -1,0 +1,9 @@
+{
+  "name": "AEGIS-AI: Neural Offensive Hub",
+  "description": "High-fidelity strategic offensive intelligence platform. Powered by neural reconnaissance, integrated OSINT telemetry, and automated exploit synthesis for mission-critical operations.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}

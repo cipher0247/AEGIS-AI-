@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@300;700&family=JetBrains+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", -apple-system, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Tactical Color Palette */
+  --color-cyber-black: #060606;
+  --color-cyber-dark: #0F0F0F;
+  --color-cyber-gray: #1A1A1A;
+  --color-cyber-border: #2A2A2A;
+  --color-cyber-accent: #00FF41; /* Neural Green */
+  
+  --color-cyber-critical: #FF3131;
+  --color-cyber-high: #FF8A00;
+  --color-cyber-medium: #FFD600;
+  --color-cyber-low: #00E0FF;
+  --color-cyber-success: #00FF41;
+  --color-cyber-text-secondary: #666666;
+}
+
+@layer base {
+  body {
+    @apply bg-cyber-black text-white font-sans antialiased selection:bg-cyber-accent selection:text-black;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Scanline Overlay Effect */
+  body::after {
+    content: "";
+    @apply pointer-events-none fixed inset-0 z-50;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+    background-size: 100% 3px, 3px 100%;
+    opacity: 0.15;
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-black/60;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full hover:bg-cyber-accent/40 transition-colors;
+  }
+
+  .glow-text-critical {
+    text-shadow: 0 0 10px rgba(255, 49, 49, 0.4);
+  }
+  .glow-text-accent {
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.4);
+  }
+  
+  .border-tactical {
+    @apply border border-white/5 bg-white/[0.02] backdrop-blur-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)];
+  }
+
+  /* Hardware "Bezel" effect */
+  .bezel {
+    @apply border-2 border-cyber-border rounded-lg bg-cyber-dark shadow-[4px_4px_0px_#000];
+  }
+
+  .typing-cursor::after {
+    content: "█";
+    @apply ml-1 text-cyber-accent animate-pulse;
+  }
+}
+
+@keyframes scan {
+  from { top: 0%; opacity: 0; }
+  5% { opacity: 0.5; }
+  95% { opacity: 0.5; }
+  to { top: 100%; opacity: 0; }
+}
+
+.animate-scan {
+  animation: scan 8s linear infinite;
+}
+
+@keyframes flicker {
+  0% { opacity: 0.9; }
+  5% { opacity: 0.85; }
+  10% { opacity: 0.9; }
+  15% { opacity: 1; }
+  25% { opacity: 0.8; }
+  50% { opacity: 0.95; }
+  100% { opacity: 1; }
+}
+
+.animate-flicker {
+  animation: flicker 0.15s infinite;
+}

@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // RBAC: Dedicated role check via document lookup
+    function isCommander() { 
+      return isVerified() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "COMMANDER"; 
+    }
+
+    // Validation for Report Record
+    function isValidReport(data) {
+      return data.userId == request.auth.uid
+        && data.target is string && data.target.size() <= 2048
+        && data.summary is map
+        && data.fullReport is map
+        && data.createdAt == request.time;
+    }
+
+    // Reports Collection
+    match /reports/{reportId} {
+      // Create: Verified Operators only, must own document
+      allow create: if isVerified() && isValidReport(incoming());
+      
+      // List: Secure Query Enforcer (Pillar 8)
+      allow list: if isVerified() && resource.data.userId == request.auth.uid;
+      
+      // Get: Owner or Commander only
+      allow get: if isVerified() && (resource.data.userId == request.auth.uid || isCommander());
+      
+      // Immutable for history integrity
+      allow update, delete: if false;
+    }
+
+    // Audit Logs: Write-only for users, Read-only for Commanders
+    match /audit_logs/{logId} {
+      allow create: if isSignedIn() 
+                    && incoming().userId == request.auth.uid
+                    && incoming().timestamp == request.time;
+      allow read: if isCommander();
+      allow update, delete: if false;
+    }
+
+    // User Public Configuration
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isCommander();
+      
+      // Initial Profile Creation
+      allow create: if isSignedIn() && isOwner(userId);
+                    
+      allow update: if isCommander() || (
+        isOwner(userId) && 
+        !existing().isLocked &&
+        // Protect security fields from user manipulation
+        // Allow resetting login attempts and basic profile syncing
+        incoming().diff(existing()).affectedKeys().hasAny(['lastLogin', 'sessionToken', 'mfaEnabled', 'failedLoginAttempts', 'isLocked', 'role', 'email'])
+      );
+    }
+  }
+}

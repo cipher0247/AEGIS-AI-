@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "ScanReportRecord": {
+      "title": "Scan Report Record",
+      "description": "A stored cybersecurity analysis report.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who owns this report." },
+        "target": { "type": "string", "description": "The target domain analyzed." },
+        "summary": { "type": "object", "description": "High-level summary of findings." },
+        "fullReport": { "type": "object", "description": "The complete structured report JSON." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." }
+      },
+      "required": ["userId", "target", "summary", "fullReport", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "Security Audit Log",
+      "description": "Log of mission-critical security events.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "event": { "type": "string", "enum": ["LOGIN_SUCCESS", "LOGIN_FAILURE", "REPORT_SYNTHESIS", "RECON_START"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "severity": { "type": "string", "enum": ["INFO", "WARN", "CRITICAL"] },
+        "metadata": { "type": "object" }
+      },
+      "required": ["userId", "event", "timestamp", "severity"]
+    },
+    "UserConfig": {
+      "title": "User Security Configuration",
+      "description": "Mission-ready user security parameters.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["OPERATOR", "COMMANDER"] },
+        "mfaEnabled": { "type": "boolean" },
+        "lastLogin": { "type": "string", "format": "date-time" },
+        "failedLoginAttempts": { "type": "integer" },
+        "isLocked": { "type": "boolean" },
+        "lockoutUntil": { "type": "string", "format": "date-time" },
+        "sessionToken": { "type": "string", "description": "Rotated token for session validation." }
+      },
+      "required": ["role", "mfaEnabled"]
+    }
+  },
+  "firestore": {
+    "/reports/{reportId}": {
+      "schema": "ScanReportRecord",
+      "description": "Collection of archived scan reports."
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Security audit trail."
+    },
+    "/users/{userId}": {
+      "schema": "UserConfig",
+      "description": "User specific security settings."
+    }
+  }
+}
