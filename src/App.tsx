@@ -43,6 +43,8 @@ import {
 } from 'lucide-react';
 import { analyzeScan, neuralScan, analyzeOSINT } from './services/gemini';
 import { ScanReport, Vulnerability, OSINTReport } from './types';
+import { validateScanTarget } from './lib/validation';
+import { generateReportHtml, downloadFile } from './lib/exporter';
 import { ExploitGraph, GraphErrorBoundary } from './components/ExploitGraph';
 import { AIChatPanel } from './components/AIChatPanel';
 import { LandingPage } from './components/LandingPage';
@@ -186,144 +188,36 @@ export default function App() {
       setOsintReport(result);
       setActiveTab('osint');
     } catch (err: any) {
-      setError(err.message || 'Intelligence Core Failure.');
+      let msg = err.message || 'Intelligence Core Failure.';
+      try {
+        const jsonMatch = msg.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.error?.message) msg = parsed.error.message;
+        }
+      } catch (_) {}
+      setError(msg);
     } finally {
       setIsAnalyzing(false);
       setScanStatus('');
     }
   };
 
-  const handleExport = (format: 'json' | 'html' | 'pdf' = 'json') => {
+  const handleExport = (format: 'json' | 'html' = 'json') => {
     const dataToExport = activeTab === 'osint' ? osintReport : report;
     if (!dataToExport) return;
 
-    if (format === 'json') {
-      const dataStr = JSON.stringify(dataToExport, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `AEGIS_INTEL_${target.replace(/[^a-z0-9]/gi, '_').toUpperCase()}_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } else if (format === 'html' || format === 'pdf') {
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="UTF-8">
-          <title>AEGIS INTEL - ${target}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
-            body { 
-              background: #050505; 
-              color: #00ff41; 
-              font-family: 'JetBrains Mono', monospace; 
-              padding: 60px; 
-              margin: 0;
-              line-height: 1.6;
-            }
-            .report-container { max-width: 900px; margin: 0 auto; }
-            header { 
-              border-bottom: 2px solid #00ff41; 
-              padding-bottom: 30px; 
-              margin-bottom: 50px;
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-end;
-            }
-            .logo { font-size: 24px; font-weight: 800; letter-spacing: 8px; }
-            .meta { font-size: 10px; opacity: 0.5; text-align: right; letter-spacing: 2px; }
-            h2 { color: white; border-left: 4px solid #00ff41; padding-left: 15px; text-transform: uppercase; letter-spacing: 3px; font-size: 18px; margin-top: 40px; }
-            .vulnerability-card { 
-              background: rgba(0,255,65,0.03); 
-              border: 1px solid rgba(0,255,65,0.1); 
-              padding: 25px; 
-              border-radius: 8px; 
-              margin-bottom: 20px; 
-            }
-            .severity { 
-              display: inline-block; 
-              padding: 4px 12px; 
-              border-radius: 4px; 
-              font-size: 10px; 
-              font-weight: 800; 
-              margin-bottom: 10px; 
-              color: black;
-            }
-            .CRITICAL { background: #ff003c; }
-            .HIGH { background: #ff7b00; }
-            .MEDIUM { background: #00bcff; }
-            .LOW { background: #888; }
-            .v-title { font-size: 16px; font-weight: 700; color: white; display: block; margin-bottom: 10px; }
-            .v-desc { font-size: 12px; opacity: 0.8; margin-bottom: 15px; }
-            .evidence { background: rgba(0,0,0,0.5); padding: 15px; font-size: 11px; border: 1px dashed rgba(0,255,65,0.2); }
-            footer { margin-top: 80px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 8px; opacity: 0.3; text-align: center; letter-spacing: 5px; }
-            @media print {
-              body { background: white; color: black; padding: 40px; }
-              header, h2 { border-color: black; color: black; }
-              .vulnerability-card { border-color: #ddd; background: #f9f9f9; }
-              .v-title, .v-desc { color: black; }
-              footer { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="report-container">
-            <header>
-              <div class="logo">AEGIS_CORE_ANALYSIS</div>
-              <div class="meta">
-                TARGET: ${target}<br>
-                REF_ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}<br>
-                DATE: ${new Date().toLocaleString()}
-              </div>
-            </header>
+    const safeTarget = (target || 'target').replace(/[^a-z0-9]/gi, '_').toUpperCase();
+    const dateStamp = new Date().toISOString().split('T')[0];
 
-            <h2>[ INTELLIGENCE_SUMMARY ]</h2>
-            <div class="vulnerability-card" style="border: none; background: none; padding: 0;">
-              <p>Automated penetration test synthesis complete. The following security vulnerabilities were active during the probe of the target domain: <strong>${target}</strong>.</p>
-            </div>
-
-            <h2>[ VULNERABILITY_INDEX ]</h2>
-            ${((dataToExport as any).vulnerabilities || (dataToExport as any).findings || (dataToExport as any).reconSummary || []).map((v: any, i: number) => `
-              <div class="vulnerability-card">
-                <div class="severity ${v.severity || v.risk_level || 'MEDIUM'}">${v.severity || v.risk_level || 'INFO'}</div>
-                <div class="v-title">${v.title || v.finding || v.type || 'Observation ' + (i+1)}</div>
-                <div class="v-desc">${v.description || v.impact || 'System observation recorded during automated reconnaissance.'}</div>
-                ${v.evidence || v.evidence_source ? `<div class="v-title" style="font-size: 10px; opacity: 0.5;">Evidence_Anchor</div><div class="evidence">${v.evidence || v.evidence_source}</div>` : ''}
-              </div>
-            `).join('')}
-
-            <footer>CLASSIFIED DOCUMENT // AEGIS-AI TACTICAL ENGINE V4.5</footer>
-          </div>
-        </body>
-        </html>
-      `;
-
-      if (format === 'html') {
-        const dataBlob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `AEGIS_REPORT_${target.replace(/[^a-z0-9]/gi, '_').toUpperCase()}.html`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      } else {
-        // PDF Simulation using printing
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(htmlContent);
-          printWindow.document.close();
-          setTimeout(() => {
-            printWindow.print();
-          }, 500);
-        }
-      }
+    if (format === 'html' && report) {
+      const htmlContent = generateReportHtml(report);
+      downloadFile(htmlContent, `AEGIS_BRIEF_${safeTarget}_${dateStamp}.html`, 'text/html');
+      return;
     }
+
+    const dataStr = JSON.stringify(dataToExport, null, 2);
+    downloadFile(dataStr, `AEGIS_INTEL_${safeTarget}_${dateStamp}.json`, 'application/json');
   };
 
   const handleAnalyze = async () => {
@@ -331,6 +225,16 @@ export default function App() {
       setError('Target Domain Required');
       return;
     }
+
+    // SSRF & target validation guard
+    const validation = validateScanTarget(target);
+    if (!validation.valid) {
+      setError(validation.error || 'Invalid target specifications');
+      return;
+    }
+
+    const sanitizedTarget = validation.sanitizedUrl || target;
+
     setIsAnalyzing(true);
     setError(null);
     setReport(null);
@@ -338,13 +242,13 @@ export default function App() {
       let finalScanData = scanData;
       if (!scanData) {
         setScanStatus('Initializing Recon... Starting Neural Probe');
-        const probedData = await neuralScan(target);
+        const probedData = await neuralScan(sanitizedTarget);
         setScanStatus('Recon Complete. Analyzing Behavior & Headers');
         finalScanData = JSON.stringify(probedData, null, 2);
         setScanData(finalScanData);
       }
       setScanStatus('Synthesizing Attack Simulation Strategy...');
-      const result = await analyzeScan(target, finalScanData, context);
+      const result = await analyzeScan(sanitizedTarget, finalScanData, context);
       
       setReport(result);
       setSelectedVulnIndex(0);
@@ -356,7 +260,15 @@ export default function App() {
         fetchHistory(user.uid);
       }
     } catch (err: any) {
-      setError(err.message || 'Strategy Engine Failure.');
+      let msg = err.message || 'Strategy Engine Failure.';
+      try {
+        const jsonMatch = msg.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.error?.message) msg = parsed.error.message;
+        }
+      } catch (_) {}
+      setError(msg);
     } finally {
       setIsAnalyzing(false);
       setScanStatus('');
@@ -517,13 +429,24 @@ export default function App() {
           <div className="h-8 w-[1px] bg-white/5" />
           <div className="flex gap-2">
             { (report || osintReport) && (
-              <button 
-                onClick={() => handleExport('json')}
-                className="px-4 py-1.5 bg-white/5 border border-white/10 rounded text-[10px] font-mono text-white/60 hover:bg-white/10 hover:text-cyber-accent transition-all uppercase tracking-widest flex items-center gap-2"
-                title="Quick Export (JSON)"
-              >
-                <Download className="w-3.5 h-3.5" /> Export
-              </button>
+              <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded p-0.5">
+                <button 
+                  onClick={() => handleExport('json')}
+                  className="px-2.5 py-1 text-[10px] font-mono text-white/70 hover:text-cyber-accent hover:bg-white/10 rounded transition-all uppercase tracking-wider flex items-center gap-1.5"
+                  title="Export Raw JSON Intelligence"
+                >
+                  <FileJson className="w-3.5 h-3.5 text-cyber-accent" /> JSON
+                </button>
+                {report && (
+                  <button 
+                    onClick={() => handleExport('html')}
+                    className="px-2.5 py-1 text-[10px] font-mono text-white/70 hover:text-cyber-accent hover:bg-white/10 rounded transition-all uppercase tracking-wider flex items-center gap-1.5 border-l border-white/10"
+                    title="Export Printable Security Brief (HTML/PDF)"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-cyber-success" /> HTML Brief
+                  </button>
+                )}
+              </div>
             )}
             <button onClick={loadSampleData} className="px-4 py-1.5 bg-white/5 border border-white/10 rounded text-[10px] font-mono hover:bg-white/10 transition-all uppercase tracking-widest">Template</button>
             <button 
@@ -665,15 +588,27 @@ export default function App() {
 
           {error && (
             <div className="p-3 bg-cyber-critical/10 border border-cyber-critical/30 rounded flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-cyber-critical text-[10px] font-mono uppercase font-bold">
-                <AlertTriangle className="w-3 h-3" /> System Fault Detected
+              <div className="flex items-center justify-between text-cyber-critical text-[10px] font-mono uppercase font-bold">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5" /> System Fault Detected
+                </span>
+                <button 
+                  onClick={() => setError(null)}
+                  className="text-white/40 hover:text-white px-1 font-mono text-xs"
+                  title="Dismiss alert"
+                >
+                  ✕
+                </button>
               </div>
-              <div className="text-[9px] text-cyber-critical/80 font-mono leading-tight">{error}</div>
+              <div className="text-[10px] text-cyber-critical/90 font-mono leading-relaxed bg-black/40 p-2 rounded border border-cyber-critical/20 break-words">
+                {error}
+              </div>
               <button 
                 onClick={handleAnalyze}
-                className="mt-1 w-full bg-cyber-critical/20 hover:bg-cyber-critical/40 text-cyber-critical text-[8px] font-bold py-1 rounded uppercase transition-all"
+                disabled={isAnalyzing}
+                className="mt-1 w-full bg-cyber-critical/20 hover:bg-cyber-critical/40 text-cyber-critical text-[9px] font-bold py-1.5 rounded uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
-                Re-initialize Neural Hub
+                <RotateCcw className="w-3 h-3" /> Re-Engage Neural Analysis
               </button>
             </div>
           )}

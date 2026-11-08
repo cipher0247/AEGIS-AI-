@@ -5,7 +5,7 @@ import {
   BrainCircuit, ShieldAlert, Code2, Sparkles, Terminal, 
   Globe, Zap, Fingerprint, Search, Info, RotateCcw
 } from 'lucide-react';
-import { ai } from '../services/gemini';
+import { streamChatMessage } from '../services/gemini';
 import { ScanReport, Vulnerability, OSINTReport } from '../types';
 import Markdown from 'react-markdown';
 
@@ -50,9 +50,6 @@ export const AIChatPanel: React.FC<Props> = ({ report, osintReport, target, sele
   const [isOpen, setIsOpen] = useState(true);
   const [statusIdx, setStatusIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  
-  // Persistent chat session
-  const chatInstance = useRef<any>(null);
 
   useEffect(() => {
     if (isTyping) {
@@ -104,41 +101,6 @@ export const AIChatPanel: React.FC<Props> = ({ report, osintReport, target, sele
     - Multi-turn: You have memory of this conversation. Build on previous tactical analysis.`;
   }, [target, report, osintReport, selectedVuln, activeTab]);
 
-  // Re-initialize chatInstance if systemInstruction changes to keep context fresh
-  useEffect(() => {
-    if (chatInstance.current) {
-      // Convert current messages to history format
-      const history = messages
-        .filter(m => !m.isStreaming && m.id !== '1' && m.id !== 'reset') // skip welcome/reset msgs
-        .map(m => ({
-          role: m.role === 'assistant' ? 'model' : m.role,
-          parts: [{ text: m.content }]
-        }));
-
-      chatInstance.current = ai.chats.create({
-        model: "gemini-3-flash-preview",
-        config: { systemInstruction },
-        history: history.length > 0 ? history : undefined
-      });
-    }
-  }, [systemInstruction]);
-
-  const initChat = () => {
-    // Initial chat with history if needed
-    const history = messages
-      .filter(m => !m.isStreaming && m.id !== '1')
-      .map(m => ({
-        role: m.role === 'assistant' ? 'model' : m.role,
-        parts: [{ text: m.content }]
-      }));
-
-    chatInstance.current = ai.chats.create({
-      model: "gemini-3-flash-preview",
-      config: { systemInstruction },
-      history: history.length > 0 ? history : undefined
-    });
-  };
-
   const handleReset = () => {
     const resetId = 'reset-' + Date.now();
     setMessages([{
@@ -147,14 +109,11 @@ export const AIChatPanel: React.FC<Props> = ({ report, osintReport, target, sele
       content: "Neural link reset. Conversation history cleared. Awaiting mission parameters.",
       timestamp: new Date()
     }]);
-    chatInstance.current = null;
   };
 
   const handleSend = async (overrideInput?: string) => {
     const textToSend = overrideInput || input;
     if (!textToSend.trim() || isTyping) return;
-
-    if (!chatInstance.current) initChat();
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -177,17 +136,25 @@ export const AIChatPanel: React.FC<Props> = ({ report, osintReport, target, sele
     }]);
 
     try {
-      const streamResponse = await chatInstance.current.sendMessageStream({
-        message: userMessage.content
-      });
+      const history = messages
+        .filter(m => !m.isStreaming && m.id !== '1' && !m.id.startsWith('reset'))
+        .map(m => ({
+          role: m.role,
+          content: m.content
+        }));
 
-      let fullContent = '';
-      for await (const chunk of streamResponse) {
-        fullContent += chunk.text || '';
-        setMessages(prev => prev.map(m => 
-          m.id === assistantMsgId ? { ...m, content: fullContent } : m
-        ));
-      }
+      let accumulated = '';
+      await streamChatMessage(
+        userMessage.content,
+        history,
+        systemInstruction,
+        (chunk) => {
+          accumulated += chunk;
+          setMessages(prev => prev.map(m => 
+            m.id === assistantMsgId ? { ...m, content: accumulated } : m
+          ));
+        }
+      );
 
       setMessages(prev => prev.map(m => 
         m.id === assistantMsgId ? { ...m, isStreaming: false } : m
@@ -197,11 +164,10 @@ export const AIChatPanel: React.FC<Props> = ({ report, osintReport, target, sele
       setMessages(prev => prev.map(m => 
         m.id === assistantMsgId ? { 
           ...m, 
-          content: "FAIL: Neural Core sync loss. API access throttled or invalid. Attempting session recovery...", 
+          content: `FAIL: Neural Core sync loss. ${error.message || 'API access throttled or invalid. Attempting session recovery...'}`, 
           isStreaming: false 
         } : m
       ));
-      chatInstance.current = null;
     } finally {
       setIsTyping(false);
     }

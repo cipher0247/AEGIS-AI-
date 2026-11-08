@@ -1,0 +1,48 @@
+name: Bug Report
+description: Create a report to help us improve AEGIS-AI
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much detail as possible.
+        *If you are reporting a security vulnerability, please do NOT use this form. Refer to SECURITY.md.*
+  - type: input
+    id: version
+    attributes:
+      label: AEGIS-AI Version / Commit Hash
+      placeholder: "e.g., v1.0.0 or commit abc1234"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the behavior.
+      placeholder: |
+        1. Start application with `npm run dev`
+        2. Enter target domain 'example.com'
+        3. Click on 'Engage Analysis'
+        4. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Error Output
+      description: Please paste any console or terminal output (omit any sensitive API keys or tokens).
+      render: shell

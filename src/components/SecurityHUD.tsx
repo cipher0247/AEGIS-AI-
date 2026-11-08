@@ -7,7 +7,7 @@ interface Props {
   user: User;
   userConfig: any;
   onClose: () => void;
-  onExport: (format: 'json' | 'html' | 'pdf') => void;
+  onExport: () => void;
   hasData: boolean;
 }
 
@@ -117,35 +117,13 @@ export const SecurityHUD: React.FC<Props> = ({ user, userConfig, onClose, onExpo
           </div>
 
           {hasData && (
-            <div className="space-y-2">
-              <div className="text-[8px] font-black uppercase text-white/20 tracking-[4px] ml-1">Exfiltration_Protocols</div>
-              <div className="grid grid-cols-3 gap-2">
-                <button 
-                  onClick={() => onExport('json')}
-                  className="flex flex-col items-center gap-1.5 py-2 bg-white/[0.03] border border-white/5 rounded hover:bg-cyber-accent/5 hover:border-cyber-accent/20 transition-all group"
-                  title="Export JSON"
-                >
-                  <Download className="w-3.5 h-3.5 text-white/20 group-hover:text-cyber-accent transition-colors" />
-                  <span className="text-[7px] font-mono text-white/30 group-hover:text-white uppercase transition-colors">JSON</span>
-                </button>
-                <button 
-                  onClick={() => onExport('html')}
-                  className="flex flex-col items-center gap-1.5 py-2 bg-white/[0.03] border border-white/5 rounded hover:bg-cyber-accent/5 hover:border-cyber-accent/20 transition-all group"
-                  title="Export HTML Report"
-                >
-                  <Globe className="w-3.5 h-3.5 text-white/20 group-hover:text-cyber-accent transition-colors" />
-                  <span className="text-[7px] font-mono text-white/30 group-hover:text-white uppercase transition-colors">HTML</span>
-                </button>
-                <button 
-                  onClick={() => onExport('pdf')}
-                  className="flex flex-col items-center gap-1.5 py-2 bg-white/[0.03] border border-white/5 rounded hover:bg-cyber-accent/5 hover:border-cyber-accent/20 transition-all group"
-                  title="Print to PDF"
-                >
-                  <Eye className="w-3.5 h-3.5 text-white/20 group-hover:text-cyber-accent transition-colors" />
-                  <span className="text-[7px] font-mono text-white/30 group-hover:text-white uppercase transition-colors">PDF</span>
-                </button>
-              </div>
-            </div>
+            <button 
+              onClick={onExport}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-cyber-accent/10 border border-cyber-accent/20 rounded text-[10px] font-bold text-cyber-accent hover:bg-cyber-accent/20 transition-all uppercase tracking-widest group"
+            >
+              <Download className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+              Exfiltrate Intelligence Brief
+            </button>
           )}
         </div>
       </div>
